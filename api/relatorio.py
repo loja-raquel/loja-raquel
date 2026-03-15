@@ -1,13 +1,7 @@
 from http.server import BaseHTTPRequestHandler
-import json
-import os
-from supabase import create_client
-
-
-def get_supabase():
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_KEY", "")
-    return create_client(url, key)
+import json, os, sys
+sys.path.insert(0, os.path.dirname(__file__))
+from db import sb_get
 
 
 class handler(BaseHTTPRequestHandler):
@@ -37,11 +31,9 @@ class handler(BaseHTTPRequestHandler):
                 self._send(400, {"sucesso": False, "erro": "Parâmetros 'de' e 'ate' são obrigatórios"})
                 return
 
-            sb = get_supabase()
-
-            vendas = sb.table("vendas").select("*").gte("data", de).lte("data", ate).execute().data or []
-            entradas = sb.table("entradas").select("*").gte("data", de).lte("data", ate).order("data", desc=True).execute().data or []
-            despesas = sb.table("despesas").select("*").gte("data", de).lte("data", ate).neq("categoria", "CMV").order("data", desc=True).execute().data or []
+            vendas   = sb_get("vendas",   f"?data=gte.{de}&data=lte.{ate}")
+            entradas = sb_get("entradas", f"?data=gte.{de}&data=lte.{ate}&order=data.desc")
+            despesas = sb_get("despesas", f"?data=gte.{de}&data=lte.{ate}&categoria=neq.CMV&order=data.desc")
 
             faturamento   = sum(float(v.get("total", 0)) for v in vendas)
             cmv           = sum(float(v.get("custo", 0)) for v in vendas)
@@ -54,7 +46,7 @@ class handler(BaseHTTPRequestHandler):
 
             por_produto = {}
             for v in vendas:
-                for item in v.get("itens", []):
+                for item in (v.get("itens") or []):
                     nome    = item.get("nome", "Desconhecido")
                     qtd     = int(item.get("qtd", 0))
                     receita = float(item.get("preco", 0)) * qtd
