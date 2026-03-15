@@ -1,5 +1,7 @@
 import os
-import httpx
+import json
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 def supabase_headers():
     key = os.environ.get("SUPABASE_KEY", "")
@@ -11,27 +13,27 @@ def supabase_headers():
     }
 
 def supabase_url(table, params=""):
-    base = os.environ.get("SUPABASE_URL", "")
+    base = os.environ.get("SUPABASE_URL", "").rstrip("/")
     return f"{base}/rest/v1/{table}{params}"
 
 def sb_get(table, params=""):
-    r = httpx.get(supabase_url(table, params), headers=supabase_headers(), timeout=15)
-    r.raise_for_status()
-    return r.json()
+    req = Request(supabase_url(table, params), headers=supabase_headers(), method="GET")
+    with urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode("utf-8"))
 
 def sb_post(table, data):
-    r = httpx.post(supabase_url(table), headers=supabase_headers(), json=data, timeout=15)
-    r.raise_for_status()
-    return r.json()
+    body = json.dumps(data).encode("utf-8")
+    req = Request(supabase_url(table), data=body, headers=supabase_headers(), method="POST")
+    with urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode("utf-8"))
 
 def sb_patch(table, data, filter_param):
-    url = supabase_url(table, f"?{filter_param}")
-    r = httpx.patch(url, headers=supabase_headers(), json=data, timeout=15)
-    r.raise_for_status()
-    return r.json()
+    body = json.dumps(data).encode("utf-8")
+    req = Request(supabase_url(table, f"?{filter_param}"), data=body, headers=supabase_headers(), method="PATCH")
+    with urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode("utf-8"))
 
 def sb_delete(table, filter_param):
-    url = supabase_url(table, f"?{filter_param}")
-    r = httpx.delete(url, headers=supabase_headers(), timeout=15)
-    r.raise_for_status()
-    return True
+    req = Request(supabase_url(table, f"?{filter_param}"), headers=supabase_headers(), method="DELETE")
+    with urlopen(req, timeout=15) as r:
+        return True
