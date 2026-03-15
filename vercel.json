@@ -17,6 +17,7 @@
     { "src": "/api/despesas",  "dest": "/api/despesas.py"  },
     { "src": "/api/relatorio", "dest": "/api/relatorio.py" },
     { "src": "/bg.jpg",        "dest": "/public/bg.jpg"    },
-    { "src": "/(.*)",          "dest": "/public/index.html"}
+    { "src": "/(.*)",          "dest": "/public/index.html"},
+    { "src": "/favicon.png", "dest": "/public/favicon.png" }
   ]
 }
