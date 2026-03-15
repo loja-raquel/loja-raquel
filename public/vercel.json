@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/*.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "public/index.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "src": "/api/produtos",   "dest": "/api/produtos.py"   },
+    { "src": "/api/vendas",     "dest": "/api/vendas.py"     },
+    { "src": "/api/entradas",   "dest": "/api/entradas.py"   },
+    { "src": "/api/despesas",   "dest": "/api/despesas.py"   },
+    { "src": "/api/relatorio",  "dest": "/api/relatorio.py"  },
+    { "src": "/(.*)",           "dest": "/public/index.html" }
+  ]
+}
