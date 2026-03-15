@@ -3,8 +3,10 @@ import json, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
 from db import sb_get, sb_post, sb_patch, sb_delete
 
-
 class handler(BaseHTTPRequestHandler):
+
+    def log_message(self, format, *args):
+        pass
 
     def _send(self, status, data):
         body = json.dumps(data, default=str, ensure_ascii=False).encode("utf-8")
@@ -15,6 +17,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
 
     def do_OPTIONS(self):
         self._send(200, {})
