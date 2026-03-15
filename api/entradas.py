@@ -1,13 +1,7 @@
 from http.server import BaseHTTPRequestHandler
-import json
-import os
-from supabase import create_client
-
-
-def get_supabase():
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_KEY", "")
-    return create_client(url, key)
+import json, os, sys
+sys.path.insert(0, os.path.dirname(__file__))
+from db import sb_get, sb_post, sb_patch
 
 
 class handler(BaseHTTPRequestHandler):
@@ -33,14 +27,13 @@ class handler(BaseHTTPRequestHandler):
             de  = qs.get("de",  [None])[0]
             ate = qs.get("ate", [None])[0]
 
-            sb    = get_supabase()
-            query = sb.table("entradas").select("*").order("data", desc=True)
-            if de:  query = query.gte("data", de)
-            if ate: query = query.lte("data", ate)
-            if not de and not ate: query = query.limit(50)
+            params = "?order=data.desc"
+            if de:  params += f"&data=gte.{de}"
+            if ate: params += f"&data=lte.{ate}"
+            if not de and not ate: params += "&limit=50"
 
-            res = query.execute()
-            self._send(200, {"sucesso": True, "dados": res.data})
+            dados = sb_get("entradas", params)
+            self._send(200, {"sucesso": True, "dados": dados})
         except Exception as e:
             self._send(500, {"sucesso": False, "erro": str(e)})
 
@@ -48,7 +41,6 @@ class handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", 0))
             body   = json.loads(self.rfile.read(length))
-            sb     = get_supabase()
 
             produto_id   = body.get("produto_id")
             produto_nome = body.get("produto_nome", "")
@@ -62,20 +54,23 @@ class handler(BaseHTTPRequestHandler):
                 self._send(400, {"sucesso": False, "erro": "produto_id e qtd são obrigatórios"})
                 return
 
-            prod = sb.table("produtos").select("qtd, custo").eq("id", produto_id).single().execute()
-            if not prod.data:
+            # Busca estoque atual
+            prods = sb_get("produtos", f"?id=eq.{produto_id}&select=qtd,custo")
+            if not prods:
                 self._send(404, {"sucesso": False, "erro": "Produto não encontrado"})
                 return
 
-            qtd_anterior = prod.data["qtd"]
+            qtd_anterior = prods[0]["qtd"]
             qtd_nova     = qtd_anterior + qtd
             total_pago   = custo * qtd
 
-            update_campos = {"qtd": qtd_nova}
-            if custo > 0:     update_campos["custo"]    = custo
-            if validade:      update_campos["validade"] = validade
-            sb.table("produtos").update(update_campos).eq("id", produto_id).execute()
+            # Atualiza produto
+            update = {"qtd": qtd_nova}
+            if custo > 0:  update["custo"]    = custo
+            if validade:   update["validade"] = validade
+            sb_patch("produtos", update, f"id=eq.{produto_id}")
 
+            # Registra entrada
             entrada = {
                 "data":         data,
                 "produto_id":   produto_id,
@@ -87,26 +82,26 @@ class handler(BaseHTTPRequestHandler):
                 "qtd_anterior": qtd_anterior,
                 "qtd_nova":     qtd_nova,
             }
-            res = sb.table("entradas").insert(entrada).execute()
+            res = sb_post("entradas", entrada)
 
+            # Lança despesa
             if total_pago > 0:
                 desc = f"Compra de mercadoria — {produto_nome} ({qtd} un)"
                 if fornecedor: desc += f" — {fornecedor}"
-                sb.table("despesas").insert({
+                sb_post("despesas", {
                     "data":      data,
                     "descricao": desc,
                     "valor":     total_pago,
                     "categoria": "Compra de mercadoria",
                     "tipo":      "saida",
-                }).execute()
+                })
 
             self._send(201, {
                 "sucesso":      True,
-                "dados":        res.data,
+                "dados":        res,
                 "qtd_anterior": qtd_anterior,
                 "qtd_nova":     qtd_nova,
                 "total_pago":   total_pago,
             })
-
         except Exception as e:
             self._send(500, {"sucesso": False, "erro": str(e)})
