@@ -3,8 +3,10 @@ import json, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
 from db import sb_get, sb_post, sb_patch
 
-
 class handler(BaseHTTPRequestHandler):
+
+    def log_message(self, format, *args):
+        pass
 
     def _send(self, status, data):
         body = json.dumps(data, default=str, ensure_ascii=False).encode("utf-8")
@@ -15,6 +17,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
 
     def do_OPTIONS(self):
         self._send(200, {})
@@ -53,7 +56,6 @@ class handler(BaseHTTPRequestHandler):
                 self._send(400, {"sucesso": False, "erro": "produto_id e qtd são obrigatórios"})
                 return
 
-            # Busca estoque atual
             prods = sb_get("produtos", f"?id=eq.{produto_id}&select=qtd,custo")
             if not prods:
                 self._send(404, {"sucesso": False, "erro": "Produto não encontrado"})
@@ -63,13 +65,11 @@ class handler(BaseHTTPRequestHandler):
             qtd_nova     = qtd_anterior + qtd
             total_pago   = custo * qtd
 
-            # Atualiza produto
             update = {"qtd": qtd_nova}
             if custo > 0:  update["custo"]    = custo
             if validade:   update["validade"] = validade
             sb_patch("produtos", update, f"id=eq.{produto_id}")
 
-            # Registra entrada
             entrada = {
                 "data":         data,
                 "produto_id":   produto_id,
@@ -83,7 +83,6 @@ class handler(BaseHTTPRequestHandler):
             }
             res = sb_post("entradas", entrada)
 
-            # Lança despesa
             if total_pago > 0:
                 desc = f"Compra de mercadoria — {produto_nome} ({qtd} un)"
                 if fornecedor: desc += f" — {fornecedor}"
