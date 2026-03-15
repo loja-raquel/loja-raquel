@@ -3,11 +3,11 @@ import json
 import os
 from supabase import create_client
 
+
 def get_supabase():
     url = os.environ.get("SUPABASE_URL", "")
     key = os.environ.get("SUPABASE_KEY", "")
-    from supabase.client import ClientOptions
-    return create_client(url, key, options=ClientOptions(postgrest_client_timeout=10))
+    return create_client(url, key)
 
 
 class handler(BaseHTTPRequestHandler):
@@ -26,10 +26,6 @@ class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self._send(200, {})
 
-    # ----------------------------------------------------------
-    # GET /api/produtos
-    # Retorna todos os produtos ordenados por nome
-    # ----------------------------------------------------------
     def do_GET(self):
         try:
             sb = get_supabase()
@@ -38,14 +34,6 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             self._send(500, {"sucesso": False, "erro": str(e)})
 
-    # ----------------------------------------------------------
-    # POST /api/produtos
-    # Body pode ser:
-    #   { "acao": "criar", ...campos }
-    #   { "acao": "atualizar", "id": X, ...campos }
-    #   { "acao": "excluir", "id": X }
-    #   { "acao": "atualizar_qtd", "id": X, "qtd": N }
-    # ----------------------------------------------------------
     def do_POST(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -55,15 +43,15 @@ class handler(BaseHTTPRequestHandler):
 
             if acao == "criar":
                 dados = {
-                    "nome":       body.get("nome"),
-                    "codigo":     body.get("codigo", ""),
-                    "categoria":  body.get("categoria", ""),
-                    "custo":      float(body.get("custo", 0)),
-                    "venda":      float(body.get("venda", 0)),
-                    "qtd":        int(body.get("qtd", 0)),
-                    "min":        int(body.get("min", 5)),
-                    "validade":   body.get("validade") or None,
-                    "unidade":    body.get("unidade", "un"),
+                    "nome":      body.get("nome"),
+                    "codigo":    body.get("codigo", ""),
+                    "categoria": body.get("categoria", ""),
+                    "custo":     float(body.get("custo", 0)),
+                    "venda":     float(body.get("venda", 0)),
+                    "qtd":       int(body.get("qtd", 0)),
+                    "min":       int(body.get("min", 5)),
+                    "validade":  body.get("validade") or None,
+                    "unidade":   body.get("unidade", "un"),
                 }
                 if not dados["nome"]:
                     self._send(400, {"sucesso": False, "erro": "Nome obrigatório"})
@@ -78,17 +66,13 @@ class handler(BaseHTTPRequestHandler):
                     return
                 campos = {}
                 for f in ["nome", "codigo", "categoria", "unidade"]:
-                    if f in body:
-                        campos[f] = body[f]
+                    if f in body: campos[f] = body[f]
                 for f in ["custo", "venda"]:
-                    if f in body:
-                        campos[f] = float(body[f])
+                    if f in body: campos[f] = float(body[f])
                 for f in ["qtd", "min"]:
-                    if f in body:
-                        campos[f] = int(body[f])
+                    if f in body: campos[f] = int(body[f])
                 if "validade" in body:
                     campos["validade"] = body["validade"] or None
-                campos["updated_at"] = "NOW()"
                 res = sb.table("produtos").update(campos).eq("id", pid).execute()
                 self._send(200, {"sucesso": True, "dados": res.data})
 
