@@ -1,13 +1,7 @@
 from http.server import BaseHTTPRequestHandler
-import json
-import os
-from supabase import create_client
-
-
-def get_supabase():
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_KEY", "")
-    return create_client(url, key)
+import json, os, sys
+sys.path.insert(0, os.path.dirname(__file__))
+from db import sb_get, sb_post, sb_delete
 
 
 class handler(BaseHTTPRequestHandler):
@@ -17,7 +11,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Content-Length", len(body))
         self.end_headers()
@@ -33,14 +27,13 @@ class handler(BaseHTTPRequestHandler):
             de  = qs.get("de",  [None])[0]
             ate = qs.get("ate", [None])[0]
 
-            sb    = get_supabase()
-            query = sb.table("despesas").select("*").neq("categoria", "CMV").order("data", desc=True)
-            if de:  query = query.gte("data", de)
-            if ate: query = query.lte("data", ate)
-            if not de and not ate: query = query.limit(50)
+            params = "?categoria=neq.CMV&order=data.desc"
+            if de:  params += f"&data=gte.{de}"
+            if ate: params += f"&data=lte.{ate}"
+            if not de and not ate: params += "&limit=50"
 
-            res = query.execute()
-            self._send(200, {"sucesso": True, "dados": res.data})
+            dados = sb_get("despesas", params)
+            self._send(200, {"sucesso": True, "dados": dados})
         except Exception as e:
             self._send(500, {"sucesso": False, "erro": str(e)})
 
@@ -49,7 +42,6 @@ class handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             body   = json.loads(self.rfile.read(length))
             acao   = body.get("acao", "criar")
-            sb     = get_supabase()
 
             if acao == "criar":
                 descricao = body.get("descricao", "").strip()
@@ -64,21 +56,21 @@ class handler(BaseHTTPRequestHandler):
                     self._send(400, {"sucesso": False, "erro": "Categoria CMV é gerada automaticamente"})
                     return
 
-                res = sb.table("despesas").insert({
+                res = sb_post("despesas", {
                     "data":      data,
                     "descricao": descricao,
                     "valor":     valor,
                     "categoria": categoria,
                     "tipo":      "saida",
-                }).execute()
-                self._send(201, {"sucesso": True, "dados": res.data})
+                })
+                self._send(201, {"sucesso": True, "dados": res})
 
             elif acao == "excluir":
                 did = body.get("id")
                 if not did:
                     self._send(400, {"sucesso": False, "erro": "ID obrigatório"})
                     return
-                sb.table("despesas").delete().eq("id", did).execute()
+                sb_delete("despesas", f"id=eq.{did}")
                 self._send(200, {"sucesso": True})
 
             else:
