@@ -7,8 +7,7 @@ from supabase import create_client
 def get_supabase():
     url = os.environ.get("SUPABASE_URL", "")
     key = os.environ.get("SUPABASE_KEY", "")
-    from supabase.client import ClientOptions
-    return create_client(url, key, options=ClientOptions(postgrest_client_timeout=10))
+    return create_client(url, key)
 
 
 class handler(BaseHTTPRequestHandler):
@@ -27,11 +26,6 @@ class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self._send(200, {})
 
-    # ----------------------------------------------------------
-    # GET /api/despesas?de=2026-01-01&ate=2026-12-31
-    # Retorna despesas no período, excluindo CMV (gerado auto).
-    # Sem parâmetros = últimas 50.
-    # ----------------------------------------------------------
     def do_GET(self):
         try:
             from urllib.parse import urlparse, parse_qs
@@ -40,39 +34,16 @@ class handler(BaseHTTPRequestHandler):
             ate = qs.get("ate", [None])[0]
 
             sb    = get_supabase()
-            query = (
-                sb.table("despesas")
-                .select("*")
-                .neq("categoria", "CMV")
-                .order("data", desc=True)
-            )
-
-            if de:
-                query = query.gte("data", de)
-            if ate:
-                query = query.lte("data", ate)
-            if not de and not ate:
-                query = query.limit(50)
+            query = sb.table("despesas").select("*").neq("categoria", "CMV").order("data", desc=True)
+            if de:  query = query.gte("data", de)
+            if ate: query = query.lte("data", ate)
+            if not de and not ate: query = query.limit(50)
 
             res = query.execute()
             self._send(200, {"sucesso": True, "dados": res.data})
         except Exception as e:
             self._send(500, {"sucesso": False, "erro": str(e)})
 
-    # ----------------------------------------------------------
-    # POST /api/despesas
-    # Body pode ser:
-    #   { "acao": "criar", ...campos }
-    #   { "acao": "excluir", "id": X }
-    #
-    # Campos para criar:
-    # {
-    #   "descricao":  "Aluguel de março",
-    #   "valor":      1200.00,
-    #   "categoria":  "Aluguel",
-    #   "data":       "2026-03-15"
-    # }
-    # ----------------------------------------------------------
     def do_POST(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -89,8 +60,6 @@ class handler(BaseHTTPRequestHandler):
                 if not descricao or valor <= 0:
                     self._send(400, {"sucesso": False, "erro": "Descrição e valor são obrigatórios"})
                     return
-
-                # Impede lançamento manual na categoria CMV — gerada automaticamente pelas vendas
                 if categoria == "CMV":
                     self._send(400, {"sucesso": False, "erro": "Categoria CMV é gerada automaticamente"})
                     return
