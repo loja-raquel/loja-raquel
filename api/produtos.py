@@ -1,13 +1,7 @@
 from http.server import BaseHTTPRequestHandler
-import json
-import os
-from supabase import create_client
-
-
-def get_supabase():
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_KEY", "")
-    return create_client(url, key)
+import json, os, sys
+sys.path.insert(0, os.path.dirname(__file__))
+from db import sb_get, sb_post, sb_patch, sb_delete
 
 
 class handler(BaseHTTPRequestHandler):
@@ -17,7 +11,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Content-Length", len(body))
         self.end_headers()
@@ -28,18 +22,16 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            sb = get_supabase()
-            res = sb.table("produtos").select("*").order("nome").execute()
-            self._send(200, {"sucesso": True, "dados": res.data})
+            dados = sb_get("produtos", "?order=nome")
+            self._send(200, {"sucesso": True, "dados": dados})
         except Exception as e:
             self._send(500, {"sucesso": False, "erro": str(e)})
 
     def do_POST(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(length))
-            acao = body.get("acao", "criar")
-            sb = get_supabase()
+            body   = json.loads(self.rfile.read(length))
+            acao   = body.get("acao", "criar")
 
             if acao == "criar":
                 dados = {
@@ -56,25 +48,8 @@ class handler(BaseHTTPRequestHandler):
                 if not dados["nome"]:
                     self._send(400, {"sucesso": False, "erro": "Nome obrigatório"})
                     return
-                res = sb.table("produtos").insert(dados).execute()
-                self._send(201, {"sucesso": True, "dados": res.data})
-
-            elif acao == "atualizar":
-                pid = body.get("id")
-                if not pid:
-                    self._send(400, {"sucesso": False, "erro": "ID obrigatório"})
-                    return
-                campos = {}
-                for f in ["nome", "codigo", "categoria", "unidade"]:
-                    if f in body: campos[f] = body[f]
-                for f in ["custo", "venda"]:
-                    if f in body: campos[f] = float(body[f])
-                for f in ["qtd", "min"]:
-                    if f in body: campos[f] = int(body[f])
-                if "validade" in body:
-                    campos["validade"] = body["validade"] or None
-                res = sb.table("produtos").update(campos).eq("id", pid).execute()
-                self._send(200, {"sucesso": True, "dados": res.data})
+                res = sb_post("produtos", dados)
+                self._send(201, {"sucesso": True, "dados": res if isinstance(res, list) else [res]})
 
             elif acao == "atualizar_qtd":
                 pid = body.get("id")
@@ -82,15 +57,15 @@ class handler(BaseHTTPRequestHandler):
                 if pid is None or qtd is None:
                     self._send(400, {"sucesso": False, "erro": "ID e qtd obrigatórios"})
                     return
-                res = sb.table("produtos").update({"qtd": int(qtd)}).eq("id", pid).execute()
-                self._send(200, {"sucesso": True, "dados": res.data})
+                res = sb_patch("produtos", {"qtd": int(qtd)}, f"id=eq.{pid}")
+                self._send(200, {"sucesso": True, "dados": res})
 
             elif acao == "excluir":
                 pid = body.get("id")
                 if not pid:
                     self._send(400, {"sucesso": False, "erro": "ID obrigatório"})
                     return
-                sb.table("produtos").delete().eq("id", pid).execute()
+                sb_delete("produtos", f"id=eq.{pid}")
                 self._send(200, {"sucesso": True})
 
             else:
