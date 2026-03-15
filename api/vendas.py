@@ -1,13 +1,7 @@
 from http.server import BaseHTTPRequestHandler
-import json
-import os
-from supabase import create_client
-
-
-def get_supabase():
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_KEY", "")
-    return create_client(url, key)
+import json, os, sys
+sys.path.insert(0, os.path.dirname(__file__))
+from db import sb_get, sb_post, sb_patch
 
 
 class handler(BaseHTTPRequestHandler):
@@ -33,14 +27,13 @@ class handler(BaseHTTPRequestHandler):
             de  = qs.get("de",  [None])[0]
             ate = qs.get("ate", [None])[0]
 
-            sb    = get_supabase()
-            query = sb.table("vendas").select("*").order("data", desc=True).order("hora", desc=True)
-            if de:  query = query.gte("data", de)
-            if ate: query = query.lte("data", ate)
-            if not de and not ate: query = query.limit(50)
+            params = "?order=data.desc,hora.desc"
+            if de:  params += f"&data=gte.{de}"
+            if ate: params += f"&data=lte.{ate}"
+            if not de and not ate: params += "&limit=50"
 
-            res = query.execute()
-            self._send(200, {"sucesso": True, "dados": res.data})
+            dados = sb_get("vendas", params)
+            self._send(200, {"sucesso": True, "dados": dados})
         except Exception as e:
             self._send(500, {"sucesso": False, "erro": str(e)})
 
@@ -48,13 +41,13 @@ class handler(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", 0))
             body   = json.loads(self.rfile.read(length))
-            sb     = get_supabase()
 
             itens = body.get("itens", [])
             if not itens:
                 self._send(400, {"sucesso": False, "erro": "Venda sem itens"})
                 return
 
+            # 1. Registrar venda
             venda = {
                 "data":     body.get("data"),
                 "hora":     body.get("hora"),
@@ -66,33 +59,34 @@ class handler(BaseHTTPRequestHandler):
                 "lucro":    float(body.get("lucro", 0)),
                 "pgto":     body.get("pgto", "Dinheiro"),
             }
-            res_venda = sb.table("vendas").insert(venda).execute()
-            venda_id  = res_venda.data[0]["id"] if res_venda.data else "?"
+            res_venda = sb_post("vendas", venda)
+            venda_id  = res_venda[0]["id"] if isinstance(res_venda, list) and res_venda else "?"
 
-            erros_estoque = []
+            # 2. Descontar estoque
+            erros = []
             for item in itens:
                 pid = item.get("id")
                 qtd = int(item.get("qtd", 1))
                 if not pid: continue
                 try:
-                    prod     = sb.table("produtos").select("qtd").eq("id", pid).single().execute()
-                    qtd_atual = prod.data["qtd"] if prod.data else 0
+                    prods     = sb_get("produtos", f"?id=eq.{pid}&select=qtd")
+                    qtd_atual = prods[0]["qtd"] if prods else 0
                     nova_qtd  = max(0, qtd_atual - qtd)
-                    sb.table("produtos").update({"qtd": nova_qtd}).eq("id", pid).execute()
-                except Exception as e:
-                    erros_estoque.append(f"Produto {pid}: {str(e)}")
+                    sb_patch("produtos", {"qtd": nova_qtd}, f"id=eq.{pid}")
+                except Exception as ex:
+                    erros.append(str(ex))
 
+            # 3. Lançar CMV
             custo = float(body.get("custo", 0))
             if custo > 0:
-                sb.table("despesas").insert({
+                sb_post("despesas", {
                     "data":      body.get("data"),
                     "descricao": f"CMV — venda #{venda_id}",
                     "valor":     custo,
                     "categoria": "CMV",
                     "tipo":      "saida",
-                }).execute()
+                })
 
-            self._send(201, {"sucesso": True, "venda_id": venda_id, "erros_estoque": erros_estoque})
-
+            self._send(201, {"sucesso": True, "venda_id": venda_id, "erros_estoque": erros})
         except Exception as e:
             self._send(500, {"sucesso": False, "erro": str(e)})
