@@ -3,8 +3,10 @@ import json, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
 from db import sb_get, sb_post, sb_patch
 
-
 class handler(BaseHTTPRequestHandler):
+
+    def log_message(self, format, *args):
+        pass  # silencia logs desnecessários
 
     def _send(self, status, data):
         body = json.dumps(data, default=str, ensure_ascii=False).encode("utf-8")
@@ -15,6 +17,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
 
     def do_OPTIONS(self):
         self._send(200, {})
@@ -46,7 +49,6 @@ class handler(BaseHTTPRequestHandler):
                 self._send(400, {"sucesso": False, "erro": "Venda sem itens"})
                 return
 
-            # 1. Registrar venda
             venda = {
                 "data":     body.get("data"),
                 "hora":     body.get("hora"),
@@ -61,7 +63,6 @@ class handler(BaseHTTPRequestHandler):
             res_venda = sb_post("vendas", venda)
             venda_id  = res_venda[0]["id"] if isinstance(res_venda, list) and res_venda else "?"
 
-            # 2. Descontar estoque
             erros = []
             for item in itens:
                 pid = item.get("id")
@@ -75,7 +76,6 @@ class handler(BaseHTTPRequestHandler):
                 except Exception as ex:
                     erros.append(str(ex))
 
-            # 3. Lançar CMV
             custo = float(body.get("custo", 0))
             if custo > 0:
                 sb_post("despesas", {
