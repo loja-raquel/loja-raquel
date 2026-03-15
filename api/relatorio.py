@@ -7,8 +7,7 @@ from supabase import create_client
 def get_supabase():
     url = os.environ.get("SUPABASE_URL", "")
     key = os.environ.get("SUPABASE_KEY", "")
-    from supabase.client import ClientOptions
-    return create_client(url, key, options=ClientOptions(postgrest_client_timeout=10))
+    return create_client(url, key)
 
 
 class handler(BaseHTTPRequestHandler):
@@ -27,15 +26,6 @@ class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self._send(200, {})
 
-    # ----------------------------------------------------------
-    # GET /api/relatorio?de=2026-01-01&ate=2026-01-07
-    # Retorna relatório completo do período:
-    # - Resumo financeiro (faturamento, CMV, lucro bruto/líquido)
-    # - Margem por produto
-    # - Entradas de mercadoria
-    # - Despesas (exceto CMV)
-    # - Total comprado no período
-    # ----------------------------------------------------------
     def do_GET(self):
         try:
             from urllib.parse import urlparse, parse_qs
@@ -49,52 +39,24 @@ class handler(BaseHTTPRequestHandler):
 
             sb = get_supabase()
 
-            # 1. Vendas do período
-            vendas = (
-                sb.table("vendas")
-                .select("*")
-                .gte("data", de)
-                .lte("data", ate)
-                .execute()
-            ).data or []
+            vendas = sb.table("vendas").select("*").gte("data", de).lte("data", ate).execute().data or []
+            entradas = sb.table("entradas").select("*").gte("data", de).lte("data", ate).order("data", desc=True).execute().data or []
+            despesas = sb.table("despesas").select("*").gte("data", de).lte("data", ate).neq("categoria", "CMV").order("data", desc=True).execute().data or []
 
-            # 2. Entradas do período
-            entradas = (
-                sb.table("entradas")
-                .select("*")
-                .gte("data", de)
-                .lte("data", ate)
-                .order("data", desc=True)
-                .execute()
-            ).data or []
-
-            # 3. Despesas do período (exceto CMV)
-            despesas = (
-                sb.table("despesas")
-                .select("*")
-                .gte("data", de)
-                .lte("data", ate)
-                .neq("categoria", "CMV")
-                .order("data", desc=True)
-                .execute()
-            ).data or []
-
-            # 4. Calcular resumo financeiro
-            faturamento  = sum(float(v.get("total", 0))  for v in vendas)
-            cmv          = sum(float(v.get("custo", 0))  for v in vendas)
-            lucro_bruto  = faturamento - cmv
-            total_desp   = sum(float(d.get("valor", 0))  for d in despesas)
-            lucro_liq    = lucro_bruto - total_desp
-            margem       = round((lucro_bruto / faturamento * 100), 1) if faturamento > 0 else 0
-            ticket_medio = round(faturamento / len(vendas), 2) if vendas else 0
+            faturamento   = sum(float(v.get("total", 0)) for v in vendas)
+            cmv           = sum(float(v.get("custo", 0)) for v in vendas)
+            lucro_bruto   = faturamento - cmv
+            total_desp    = sum(float(d.get("valor", 0)) for d in despesas)
+            lucro_liq     = lucro_bruto - total_desp
+            margem        = round((lucro_bruto / faturamento * 100), 1) if faturamento > 0 else 0
+            ticket_medio  = round(faturamento / len(vendas), 2) if vendas else 0
             total_compras = sum(float(e.get("total_pago", 0)) for e in entradas)
 
-            # 5. Margem por produto
             por_produto = {}
             for v in vendas:
                 for item in v.get("itens", []):
-                    nome   = item.get("nome", "Desconhecido")
-                    qtd    = int(item.get("qtd", 0))
+                    nome    = item.get("nome", "Desconhecido")
+                    qtd     = int(item.get("qtd", 0))
                     receita = float(item.get("preco", 0)) * qtd
                     custo   = float(item.get("custo", 0)) * qtd
                     if nome not in por_produto:
@@ -120,16 +82,16 @@ class handler(BaseHTTPRequestHandler):
                 "sucesso": True,
                 "periodo": {"de": de, "ate": ate},
                 "resumo": {
-                    "faturamento":   round(faturamento, 2),
-                    "cmv":           round(cmv, 2),
-                    "lucro_bruto":   round(lucro_bruto, 2),
-                    "lucro_liquido": round(lucro_liq, 2),
-                    "total_despesas":round(total_desp, 2),
-                    "total_compras": round(total_compras, 2),
-                    "margem":        margem,
-                    "ticket_medio":  ticket_medio,
-                    "qtd_vendas":    len(vendas),
-                    "qtd_entradas":  len(entradas),
+                    "faturamento":    round(faturamento, 2),
+                    "cmv":            round(cmv, 2),
+                    "lucro_bruto":    round(lucro_bruto, 2),
+                    "lucro_liquido":  round(lucro_liq, 2),
+                    "total_despesas": round(total_desp, 2),
+                    "total_compras":  round(total_compras, 2),
+                    "margem":         margem,
+                    "ticket_medio":   ticket_medio,
+                    "qtd_vendas":     len(vendas),
+                    "qtd_entradas":   len(entradas),
                 },
                 "por_produto": produtos_lista,
                 "entradas":    entradas,
