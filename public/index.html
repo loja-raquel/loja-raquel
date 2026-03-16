@@ -155,7 +155,7 @@ label{font-family:var(--title);font-size:9px;font-weight:600;letter-spacing:.18e
       <div class="scanner-area" id="scanner-area">
         <div style="font-family:var(--title);font-size:9px;color:var(--muted);letter-spacing:.18em;margin-bottom:10px;">CÓDIGO DE BARRAS / BUSCA POR NOME</div>
         <input class="scanner-input" id="scanner-input" placeholder="Leia o código ou digite o nome..." autocomplete="off" oninput="buscarProduto(this.value)" onkeydown="if(event.key==='Enter'){adicionarPorCodigo();event.preventDefault();}">
-        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;justify-content:center;"><label style="margin:0;font-size:9px;letter-spacing:.1em;color:var(--muted);">QTD:</label><input type="number" id="scanner-qtd" value="1" min="1" style="width:70px;text-align:center;font-family:var(--title);font-size:14px;font-weight:700;padding:6px;"><span style="font-size:9px;color:var(--muted);font-family:var(--title);letter-spacing:.1em;">ENTER PARA ADICIONAR</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;justify-content:center;"><label style="margin:0;font-size:9px;letter-spacing:.1em;color:var(--muted);">QTD:</label><input type="number" id="scanner-qtd" value="1" min="1" style="width:70px;text-align:center;font-family:var(--title);font-size:14px;font-weight:700;padding:6px;" onkeydown="if(event.key==='Enter'){adicionarPorCodigo();event.preventDefault();}"><span style="font-size:9px;color:var(--muted);font-family:var(--title);letter-spacing:.1em;">ENTER PARA ADICIONAR</span></div>
       </div>
       <div id="sugestoes" style="margin-bottom:14px;"></div>
       <div id="carrinho"></div>
