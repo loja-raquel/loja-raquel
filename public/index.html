@@ -386,7 +386,7 @@ async function loadFinanceiro(){
   const recManVal=recManArr.reduce((a,d)=>a+parseFloat(d.valor||0),0);
   if(recManVal>0){document.getElementById('card-rec-manual').style.display='';document.getElementById('f-rec-manual').textContent=fmt(recManVal);}
   _lancamentos_todos=[
-    ...vendas_cache.map(v=>({data:v.data,desc:(v.hora?v.hora+' — ':'')+' Venda — '+(v.itens||[]).map(i=>i.nome+(i.qtd>1?' ×'+i.qtd:'')).join(', ').substring(0,50),cat:'Venda',tipo:'entrada',valor:parseFloat(v.total||0),id_venda:v.id,pgto:v.pgto,desconto:v.desconto,custo:v.custo})),
+    ...vendas_cache.map(v=>({data:v.data,desc:(v.hora?v.hora+' — ':'')+' Venda — '+(v.itens||[]).map(i=>i.nome+(i.qtd>1?' ×'+i.qtd:'')).join(', ').substring(0,50)+(v.pgto?' ['+v.pgto+']':''),cat:'Venda',tipo:'entrada',valor:parseFloat(v.total||0),id_venda:v.id,pgto:v.pgto,desconto:v.desconto,custo:v.custo})),
     ...despesas_cache.map(d=>({data:d.data,desc:d.descricao,cat:d.categoria,tipo:'saida',valor:parseFloat(d.valor||0),id_orig:d.id})),
     ...recManArr.map(d=>({data:d.data,desc:d.descricao,cat:d.categoria,tipo:'entrada',valor:parseFloat(d.valor||0),id_orig:d.id}))
   ].sort((a,b)=>String(b.data).localeCompare(String(a.data)));
