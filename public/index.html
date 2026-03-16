@@ -289,6 +289,13 @@ label{font-family:var(--title);font-size:9px;font-weight:600;letter-spacing:.18e
         <option value="Marketing">Marketing</option>
         <option value="Outros">Outros</option>
       </select>
+      <select id="f-pgto-filtro" onchange="filtrarLancamentos()" style="width:auto;min-width:160px;">
+        <option value="">Todas as formas</option>
+        <option value="Dinheiro">Dinheiro</option>
+        <option value="PIX">PIX</option>
+        <option value="Cartão débito">Cartão débito</option>
+        <option value="Cartão crédito">Cartão crédito</option>
+      </select>
       <button class="btn btn-ghost btn-sm" onclick="limparFiltrosFinanceiro()">Limpar filtros</button>
     </div>
     <div class="card-sub-title">Lançamentos</div>
@@ -388,10 +395,12 @@ async function loadFinanceiro(){
 
 function filtrarLancamentos(){
   const cat=document.getElementById('f-cat-filtro')?.value||'';
+  const pgto=document.getElementById('f-pgto-filtro')?.value||'';
   let lista=_lancamentos_todos;
   if(cat==='entrada') lista=lista.filter(t=>t.tipo==='entrada'&&t.cat!=='Venda');
   else if(cat==='Venda') lista=lista.filter(t=>t.cat==='Venda');
   else if(cat) lista=lista.filter(t=>t.cat===cat);
+  if(pgto) lista=lista.filter(t=>t.pgto===pgto);
   const w=document.getElementById('tabela-financeiro-wrap');
   w.innerHTML=lista.length
     ?`<table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Valor</th><th></th></tr></thead><tbody>${lista.map(t=>`<tr><td style="font-size:11px;">${fmtDate(t.data)}</td><td>${t.desc}</td><td style="color:var(--muted);">${t.cat}</td><td><span class="badge ${t.tipo==='entrada'?'badge-green':'badge-red'}">${t.tipo==='entrada'?'Entrada':'Saída'}</span></td><td style="font-weight:600;${t.tipo==='entrada'?'color:var(--green)':'color:var(--red)'}">${fmt(t.valor)}</td><td style="white-space:nowrap;">${t.id_orig?`<button class="btn btn-primary btn-sm" style="margin-right:4px;" onclick='editarLancamento(${JSON.stringify({id:t.id_orig,desc:t.desc,valor:t.valor,data:t.data,tipo:t.tipo})})'>✎</button><button class="btn btn-danger btn-sm" onclick="excluirLancDespesa(${t.id_orig})">×</button>`:t.id_venda?`<button class="btn btn-primary btn-sm" style="margin-right:4px;" onclick='editarVenda(${t.id_venda},${JSON.stringify({pgto:t.pgto,desconto:t.desconto,total:t.valor,custo:t.custo})})'>✎</button><button class="btn btn-danger btn-sm" onclick="excluirVenda(${t.id_venda})">×</button>`:''}</td></tr>`).join('')}</tbody></table>`
@@ -402,7 +411,8 @@ function limparFiltrosFinanceiro(){
   const de=document.getElementById('f-de');
   const ate=document.getElementById('f-ate');
   const cat=document.getElementById('f-cat-filtro');
-  if(de)de.value='';if(ate)ate.value='';if(cat)cat.value='';
+  const pgto=document.getElementById('f-pgto-filtro');
+  if(de)de.value='';if(ate)ate.value='';if(cat)cat.value='';if(pgto)pgto.value='';
   loadFinanceiro();
 }
 
